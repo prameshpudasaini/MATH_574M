@@ -2,8 +2,7 @@ library(data.table)
 
 # prostate cancer data set
 url <- "https://hastie.su.domains/ElemStatLearn/datasets/prostate.data"
-data <- fread(url)
-data$V1 <- NULL
+data <- fread(url, drop = 1)
 
 train <- data[train == 'T', 1:9]
 test <- data[train == 'F', 1:9]
@@ -13,6 +12,7 @@ y_train <- train$lpsa
 X_test <- test[, 1:8]
 y_test <- test$lpsa
 
+set.seed(1000)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Linear Regression ------------------------------------------------------------
@@ -82,7 +82,7 @@ reg_best_mod <- function(eval_param) {
     num_coef <- which.min(eval_param)
     coef(reg_fit, num_coef)
     
-    imp_var <- names(coef(reg_fit, num_coef)) |> tail(-1) # important variables
+    imp_var <- names(coef(reg_fit, num_coef))[-1] # important variables
     imp_var
     all_var <- append(imp_var, 'lpsa')
     all_var
@@ -100,12 +100,54 @@ reg_best_mod <- function(eval_param) {
                 lm_reg_test_error = lm_reg_test_error))
 }
 
-## best mod based on BIC
-reg_best_mod_bic <- best_mod(reg_train_bic)
+## best model based on BIC
+reg_best_mod_bic <- reg_best_mod(reg_train_bic)
 reg_best_mod_bic$num_coef
+reg_best_mod_bic$lm_reg_fit$coefficients
 reg_best_mod_bic$lm_reg_test_error
 
-## best mod based on AIC
-reg_best_mod_aic <- best_mod(reg_train_aic)
+## best model based on AIC
+reg_best_mod_aic <- reg_best_mod(reg_train_aic)
 reg_best_mod_aic$num_coef
+reg_best_mod_aic$lm_reg_fit$coefficients
 reg_best_mod_aic$lm_reg_test_error
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# LASSO Regression -------------------------------------------------------------
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+library(lars)
+
+lasso_fit <- lars(as.matrix(X_train), y_train)
+
+plot(lasso_fit)
+summary(lasso_fit)
+
+# cross-validation
+lasso_s <- seq(0, 1, length = 100)
+lasso_cv <- cv.lars(as.matrix(X_train), y_train, K = 5, index = lasso_s)
+
+names(lasso_cv)
+lasso_mcv <- which.min(lasso_cv$cv)
+
+# minimum CV rule
+lasso_mcv_best_s <- lasso_s[lasso_mcv]
+
+lasso_mcv_pred <- predict(lasso_fit, s = lasso_mcv_best_s, type = 'coef', mode = 'frac')
+lasso_mcv_pred$s
+lasso_mcv_pred$coefficients
+
+lasso_mcv_test_pred <- predict(lasso_fit, newx = X_test, s = lasso_mcv_best_s, type = 'fit', mode = 'frac')
+lasso_mcv_test_error <- mean((y_test - lasso_mcv_test_pred$fit) ^ 2)
+
+# one-standard rule
+bound <- lasso_cv$cv[lasso_mcv] + lasso_cv$cv.error[lasso_mcv]
+lasso_st_best_s <- lasso_s[min(which(lasso_cv$cv < bound))]
+
+lasso_st_pred <- predict(lasso_fit, s = lasso_st_best_s, type = 'coef', mode = 'frac')
+lasso_st_pred$s
+lasso_st_pred$coefficients
+
+lasso_st_test_pred <- predict(lasso_fit, newx = X_test, s = lasso_st_best_s, type = 'fit', mode = 'frac')
+lasso_st_test_error <- mean((y_test - lasso_st_test_pred$fit) ^ 2)
