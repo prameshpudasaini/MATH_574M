@@ -151,3 +151,56 @@ lasso_st_pred$coefficients
 
 lasso_st_test_pred <- predict(lasso_fit, newx = X_test, s = lasso_st_best_s, type = 'fit', mode = 'frac')
 lasso_st_test_error <- mean((y_test - lasso_st_test_pred$fit) ^ 2)
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Adaptive LASSO Regression ----------------------------------------------------
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# compute weights
+lm_coef <- lm_fit$coefficients
+
+alasso_tune_param <- 1
+alasso_w <- 1 / (abs(lm_coef) ^ alasso_tune_param)
+
+# modify X
+X_train_star <- X_train * (1 / alasso_w)
+
+# fit adaptive LASSO
+alasso_fit <- lars(as.matrix(X_train_star), y_train)
+
+names(alasso_fit)
+plot(alasso_fit)
+
+# modify beta
+alasso_fit$beta <- alasso_fit$beta * (1 / alasso_w)
+
+# cross-validation
+alasso_s <- seq(0, 1, length = 100)
+alasso_cv <- cv.lars(as.matrix(X_train_star), y_train, K = 5, index = alasso_s)
+
+names(alasso_cv)
+alasso_mcv <- which.min(alasso_cv$cv)
+
+# minimum CV rule
+alasso_mcv_best_s <- alasso_s[alasso_mcv]
+
+alasso_mcv_pred <- predict(alasso_fit, s = alasso_mcv_best_s, type = 'coef', mode = 'frac')
+alasso_mcv_pred$s
+alasso_mcv_pred$coefficients
+
+X_test_star <- X_test * (1 / alasso_w)
+
+alasso_mcv_test_pred <- predict(alasso_fit, newx = X_test_star, s = alasso_mcv_best_s, type = 'fit', mode = 'frac')
+alasso_mcv_test_error <- mean((y_test - alasso_mcv_test_pred$fit) ^ 2)
+
+# one-standard rule
+bound <- alasso_cv$cv[alasso_mcv] + alasso_cv$cv.error[alasso_mcv]
+alasso_st_best_s <- alasso_s[min(which(alasso_cv$cv < bound))]
+
+alasso_st_pred <- predict(alasso_fit, s = alasso_st_best_s, type = 'coef', mode = 'frac')
+alasso_st_pred$s
+alasso_st_pred$coefficients
+
+alasso_st_test_pred <- predict(alasso_fit, newx = X_test_star, s = alasso_st_best_s, type = 'fit', mode = 'frac')
+alasso_st_test_error <- mean((y_test - alasso_st_test_pred$fit) ^ 2)
