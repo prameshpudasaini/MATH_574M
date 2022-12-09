@@ -1,5 +1,6 @@
 library(data.table)
 library(e1071)
+library(tree)
 
 # data accessed from https://hastie.su.domains/ElemStatLearn/data.html
 
@@ -50,3 +51,29 @@ for (i in seq_along(degree_polynomial_kernel)) {
     
     print(paste0("Test error for degree '", degree_polynomial_kernel[i], "' is: ", psvm.test.error))
 }
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Classification Tree ----------------------------------------------------------
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+zip.train <- read.csv("ignore/zip.train.gz", header = FALSE, sep = " ")
+zip.train <- as.data.table(zip.train)[V1 %in% c(1, 2, 3), ]
+zip.train[, V1 := factor(as.factor(V1), levels = c(1, 2, 3))]
+
+zip.test <- read.csv("ignore/zip.test.gz", header = FALSE, sep = " ")
+zip.test <- as.data.table(zip.test)[V1 %in% c(1, 2, 3), ]
+zip.test[, V1 := factor(as.factor(V1), levels = c(1, 2, 3))]
+
+zip.train <- zip.train[, 1:257]
+
+tree.fit <- tree(V1 ~ ., data = zip.train, split = 'deviance')
+
+tree.train.pred <- predict(tree.fit, type = 'class')
+tree.train.error <- round(mean(tree.train.pred != zip.train$V1), 6L)
+
+tree.test.pred <- predict(tree.fit, newdata = zip.test[, -1], type = 'class')
+tree.test.error <- round(mean(tree.test.pred != zip.test$V1), 6L)
+
+tree.train.error
+tree.test.error
